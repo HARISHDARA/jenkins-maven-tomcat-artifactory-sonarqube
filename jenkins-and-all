@@ -1,0 +1,209 @@
+References:
+ https://www.youtube.com/watch?v=ERR7cqW28FY
+ https://pkg.jenkins.io/redhat/
+ https://github.com/ravdy/DevOps/blob/master/jenkins/jenkins_installation.md
+ 
+Jenkins Installation on Ec2:
+
+Prerequisites:
+  EC2 Instance, with Internet Access
+  Security Group with Port 8080 open for internet
+  Java 11 should be installed 
+ 
+1. sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+2. sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+3. amazon-linux-extras install epel 
+4. amazon-linux-extras install java-openjdk11 
+5. yum install jenkins -y
+6. systemctl status jenkins
+7. systemctl start jenkins
+8. systemctl enable jenkins
+
+#on RedHat/CentOs 
+#yum install epel-release # repository that provides 'daemonize'
+#yum install java-11-openjdk-devel
+#yum install jenkins
+
+github Webhook integration with jenkins:
+
+ payload url: http://3.231.60.149:8080/github-webhook/
+
+export PATH=/root:$PATH
+
+
+
+export PATH=/usr/java/<JDK Directory>/bin:$PATH.
+Source: https://frameboxxindore.com/linux/how-do-i-permanently-export-a-path-in-linux.html
+
+########### Integrate Jenkins with github and maven #############
+
+Install maven plugin to run maven builds ( maven-integration plugin)
+Install github-integration plugin in jenkins
+Install git package using yum
+install mvn package using:  yum install maven -y
+set the maven path in manage jenkins/global tool configuration
+Goals:
+
+  Create job with maven-project and define goals as below.
+  https://www.journaldev.com/33659/maven-build-lifecycle-phases-goals#:~:text=Maven%20goals%20represent%20a%20specific%20task%20that%20contributes,goal%20is%3A%20%24%20mvn%20plugin-prefix%3Agoal%20%24%20mvn%20plugin-group-id%3Aplugin-artifact-id%5B%3Aplugin-version%5D%3Agoal
+ 
+ clean compile package install
+
+
+######## SonarQube Installation ############
+
+Reference: https://github.com/ravdy/DevOps
+
+1. Install OpenJDK:
+OpenJDK 11 is compatible with SonarQube 8.9
+
+Check whether openjdk package is available or not.
+  yum list |grep -i openjdk
+  amazon-linux-extras list
+  amazon-linux-extras install java-openjdk11
+2. Download and Install SonarQube
+   cd /opt
+   wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-8.9.8.54436.zip
+   unzip sonarqube-8.9.8.54436.zip
+   useradd sonaradmin ( we can not run sonarqube as a root user )
+    chown -R sonaradmin:sonaradmin sonarqube-8.9.8.54436
+   su - sonaradmin
+   cd /opt/sonarqube-8.9.8.54436/bin/linux-x86-64
+   ./sonar.sh start
+   ./sonar.sh status
+   
+   access sonarqube server with IP:9000 ( admin/admin )
+   
+3. Integrate SonarQube with Jenkins: https://github.com/ravdy/DevOps/blob/master/sonarqube/integrate_sonar_with_jenkins.md
+    
+   download sonarqube plugin ( sonarqube scanner )
+   
+   sonarqube scanner installation is required if we are using pipeline as a code but not required for maven projects.
+   
+   3.1: Without SonarQube configuration in manage jenkins:
+   Create a project and token and give all the details in maven goals without configuring sonarqube in manage jenkins option.
+   
+   mvn sonar:sonar \
+  -Dsonar.projectKey=sonar-jenkins \
+  -Dsonar.host.url=http://54.167.49.86:9000 \
+  -Dsonar.login=22ef18adcd1359e3474cc744af5a246ca3e2fa3c
+  
+  With SonarQube configuration in manage jenkins:
+    download sonarqube plugin ( sonarqube scanner )
+	Navigate to manage jenkins /configure system
+	  provide sonarqube details here and use pipeline as a code.
+	  
+pipeline{
+    agent any
+    #environment {
+     #   PATH = "$PATH:/opt/apache-maven-3.8.2/bin"
+    #}
+    stages{
+       stage('GetCode'){
+            steps{
+                git 'https://github.com/ravdy/javaloginapp.git'
+            }
+         }        
+       stage('Build'){
+            steps{
+                sh 'mvn clean package'
+            }
+         }
+        stage('SonarQube analysis') {
+//    def scannerHome = tool 'SonarScanner 4.0';
+        steps{
+        withSonarQubeEnv('sonarqube-8.9') { 
+        // If you have configured more than one global server connection, you can specify its name
+//      sh "${scannerHome}/bin/sonar-scanner"
+        sh "mvn sonar:sonar"
+    }
+        }
+        }
+       
+    }
+}
+
+
+ ############## Tomcat Installation and Deploy war file##########
+ 
+ https://github.com/ravdy/DevOpsDemos/blob/master/Tomcat/tomcat_installation.MD
+ https://www.youtube.com/watch?v=m21nFreFw8A
+ 
+1. Create tomcat directory
+  cd /opt
+  wget https://dlcdn.apache.org/tomcat/tomcat-8/v8.5.81/bin/apache-tomcat-8.5.81.tar.gz
+2. tar -xvzf /opt/apache-tomcat-8.5.81.tar.gz
+
+3. give executing permissions to startup.sh and shutdown.sh which are under bin.
+   chmod +x /opt/apache-tomcat-<version>/bin/startup.sh 
+   chmod +x /opt/apache-tomcat-<version>/bin/shutdown.sh
+   
+   
+4. now application is accessible on port 8090. but tomcat application doesnt allow to login from browser. changing a default parameter in context.xml does address this issue
+#search for context.xml
+
+  find / -name context.xml
+  
+above command gives 3 context.xml files. comment () Value ClassName field on files which are under webapp directory. After that restart tomcat services to effect these changes. At the time of writing this lecture below 2 files are updated.
+         
+/opt/tomcat/webapps/host-manager/META-INF/context.xml
+/opt/tomcat/webapps/manager/META-INF/context.xml
+
+5. Update users information in the tomcat-users.xml file goto tomcat home directory and Add below users to conf/tomcat-users.xml file
+ <role rolename="manager-gui"/>
+ <role rolename="manager-script"/>
+ <role rolename="manager-jmx"/>
+ <role rolename="manager-status"/>
+ <user username="admin" password="admin" roles="manager-gui, manager-script, manager-jmx, manager-status"/>
+ <user username="deployer" password="deployer" roles="manager-script"/>
+ <user username="tomcat" password="s3cret" roles="manager-gui"/>
+ 
+Restart serivce and try to login to tomcat application from the browser. This time it should be Successful
+
+4. Use pipelie script to deploy war file to tomcat server.
+
+   when we run pipeline it runs using jenkins user, so provide owner permissions to apache-tomcat folder using below command
+     chown -R jenkins:jenkins /opt/apache-tomcat-8.5.81
+	 
+pipeline{
+    agent any
+    stages{
+       stage('GetCode'){
+            steps{
+                git 'https://github.com/HARISHDARA/tomcat-war-example.git'
+            }
+        }        
+       stage('Build'){
+            steps{
+                sh 'mvn clean install'
+            }
+        }
+        stage('Deploy to Tomcat'){
+            steps{
+                sh 'pwd'
+                sh 'whoami'
+                sh 'cp /var/lib/jenkins/workspace/war/webapp/target/webapp.war /opt/apache-tomcat-8.5.81/webapps'            }
+        }
+        
+    }
+    
+}
+
+
+###### Install and configure Artifactory #########
+
+Artifactory default port number: 8081
+
+1. yum install java-1.8* -y 
+2. wget https://jfrog.bintray.com/artifactory/jfrog-artifactory-oss-6.9.6.zip
+3. unzip jfrog-artifactory-oss-6.9.6.zip
+4. cd /opt/artifactory-oss-6.9.6/bin
+5. ./artifactory.sh start
+
+Integrate Artifactory with Jenkins:
+  Install Artifactory plugin in jenkins.
+  Navigate to manage jenkins/configure system
+    provide artifactory server details at Jfrog platform instances.
+  create maven project with goals: clean install
+  select deploy-artifacts in post-build actions and refresh repositories.
+  

@@ -50,6 +50,15 @@ Goals:
  clean compile package install
 
 
+Maven lifecycle::
+ generate-sources
+ compile
+ test-compile
+ test
+ package
+ integration-test
+ install
+ deploy
 ######## SonarQube Installation ############
 
 Reference: https://github.com/ravdy/DevOps
